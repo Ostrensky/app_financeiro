@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0f1115" />
+  <title>Entrar — Cofre</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <style>
+    body { display: grid; place-items: center; min-height: 100vh; padding: 20px; }
+    .auth { width: 100%; max-width: 380px; }
+    .auth .brand { justify-content: center; padding-bottom: 28px; }
+    .auth .logo { width: 44px; height: 44px; font-size: 24px; border-radius: 12px; }
+    .auth h1 { font-size: 24px; }
+    .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 28px 26px; box-shadow: var(--shadow); }
+    .auth-card h2 { font-size: 20px; margin-bottom: 4px; letter-spacing: -.02em; }
+    .auth-card p.sub { color: var(--muted); font-size: 13.5px; margin-bottom: 20px; }
+    .auth-card .field { margin-bottom: 14px; }
+    .auth-card .btn-gold { width: 100%; padding: 12px; font-size: 15px; margin-top: 6px; }
+    .err { background: rgba(246,119,111,.12); color: var(--red); border: 1px solid rgba(246,119,111,.3); padding: 10px 12px; border-radius: 10px; font-size: 13.5px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="auth">
+    <div class="brand"><div class="logo">C</div><div><h1>Cofre</h1></div></div>
+    <div class="auth-card">
+      <h2>Bem-vindo de volta</h2>
+      <p class="sub">Digite sua senha para acessar suas finanças.</p>
+      {% if error %}<div class="err">{{ error }}</div>{% endif %}
+      <form method="post">
+        <div class="field"><label>Senha</label><input type="password" name="password" autofocus required></div>
+        <button class="btn btn-gold" type="submit">Entrar</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1115" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>Cofre — Controle Financeiro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">C</div>
+        <div><h1>Cofre</h1><small>Controle Financeiro</small></div>
+      </div>
+      <button class="nav-item active" data-view="dashboard"><span class="ico">◆</span> Painel</button>
+      <button class="nav-item" data-view="budget"><span class="ico">▦</span> Orçamento</button>
+      <button class="nav-item" data-view="transactions"><span class="ico">⇄</span> Lançamentos</button>
+      <button class="nav-item" data-view="goals"><span class="ico">○</span> Metas</button>
+      <button class="nav-item" data-view="calendar"><span class="ico">◷</span> Calendário</button>
+      <button class="nav-item" data-view="cards"><span class="ico">▭</span> Cartões</button>
+      <button class="nav-item" data-view="forecast"><span class="ico">📈</span> Previsão</button>
+      <button class="nav-item" data-view="reports"><span class="ico">≡</span> Relatorios</button>
+      <button class="nav-item" data-view="health"><span class="ico">◎</span> Saude</button>
+      <button class="nav-item" data-view="simulator"><span class="ico">?</span> Simular</button>
+      <button class="nav-item" data-view="networth"><span class="ico">◈</span> Patrimônio</button>
+      <button class="nav-item" data-view="scheduled"><span class="ico">⏱</span> Recorrentes</button>
+      <button class="nav-item" data-view="accounts"><span class="ico">▣</span> Contas</button>
+      <button class="nav-item" data-view="import"><span class="ico">⤓</span> Importar</button>
+      <div style="flex:1"></div>
+      <button class="nav-item" data-view="review"><span class="ico">✓</span> Revisão</button>
+      <button class="nav-item" data-view="categories"><span class="ico">☰</span> Categorias</button>
+      <a class="nav-item" href="/logout" style="text-decoration:none"><span class="ico">⎋</span> Sair</a>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h2 id="view-title">Painel</h2>
+          <div class="sub" id="view-sub"></div>
+        </div>
+        <div id="topbar-actions"></div>
+      </div>
+      <div id="view"></div>
+    </main>
+  </div>
+
+  <button class="fab" id="fab">+</button>
+
+  <nav class="mobile-nav">
+    <button class="active" data-view="dashboard"><span class="ico">◆</span> Painel</button>
+    <button data-view="budget"><span class="ico">▦</span> Orçar</button>
+    <button data-view="transactions"><span class="ico">⇄</span> Lanç.</button>
+    <button data-view="calendar"><span class="ico">◷</span> Agenda</button>
+    <button data-view="cards"><span class="ico">▭</span> Cartões</button>
+    <button data-view="networth"><span class="ico">◈</span> Patrim.</button>
+    <button data-view="accounts"><span class="ico">▣</span> Contas</button>
+  </nav>
+
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal" id="modal"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
