@@ -777,6 +777,12 @@ async function renderCategoryEvolution() {
 async function renderSpendingTimeline() {
   const data = await api.get(`/reports/spending-timeline?month=${state.month}&category_id=${reportState.categoryId}`);
   const remainingCls = data.remaining_goal >= 0 ? "pos" : "neg";
+  const paceRows = reportState.categoryId === "all" ? data.category_pace : data.category_pace.filter(x => x.category_id == reportState.categoryId);
+  const statusTag = s => s === "danger"
+    ? '<span class="tag" style="background:rgba(246,119,111,.15);color:var(--red)">Reduzir</span>'
+    : s === "warn"
+      ? '<span class="tag" style="background:rgba(231,189,107,.15);color:var(--gold)">Atenção</span>'
+      : '<span class="tag" style="background:rgba(87,217,138,.15);color:var(--green)">Ok</span>';
   $("#view").innerHTML = `
     <div class="rta-bar">
       <div><small>${esc(data.label)} em ${monthLabel(data.month)}</small><div class="amt num">${brl(data.projected_total)}</div></div>
@@ -797,6 +803,17 @@ async function renderSpendingTimeline() {
         ${monthSwitcher()}
       </div>
       <div class="chart-wrap"><canvas id="timelineChart" height="180"></canvas></div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-head"><h3>Ritmo por categoria</h3><span class="tag">${data.remaining_days} dia(s) restantes</span></div>
+      <table><thead><tr><th>Categoria</th><th>Status</th><th class="right">Real + previsto</th><th class="right">Pode gastar/dia</th><th class="hide-mobile">Leitura</th></tr></thead>
+      <tbody>${paceRows.map(x => `<tr>
+        <td>${esc(x.category)}<div style="color:var(--faint);font-size:12px">${esc(x.group)} · meta ${brl(x.goal)}</div></td>
+        <td>${statusTag(x.status)}</td>
+        <td class="right num ${x.projected > x.goal ? "neg" : ""}">${brl(x.projected)}</td>
+        <td class="right num ${x.daily_safe <= 0 && data.remaining_days > 0 ? "neg" : ""}">${data.remaining_days > 0 ? brl(x.daily_safe) : "-"}</td>
+        <td class="hide-mobile" style="color:var(--muted);font-size:13px">${esc(x.message)}</td>
+      </tr>`).join("") || '<tr><td colspan="5" class="empty">Sem categorias com meta ou gasto neste mes.</td></tr>'}</tbody></table>
     </div>
     <div class="panel" style="margin-top:16px">
       <div class="panel-head"><h3>Dias com movimento</h3></div>

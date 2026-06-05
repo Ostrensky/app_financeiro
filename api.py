@@ -893,6 +893,78 @@ def report_spending_timeline():
     actual_total = sum(actual_by_day.values())
     expected_total = sum(expected_by_day.values())
     projected_total = actual_total + expected_total
+    elapsed_days = min(end.day, max(1, (today - start).days + 1)) if month == today.strftime("%Y-%m") else end.day
+    remaining_days = max(0, end.day - elapsed_days)
+    as_of_day = min(today, end) if month == today.strftime("%Y-%m") else end
+
+    actual_by_category = defaultdict(int)
+    actual_q = Transaction.query.filter(
+        Transaction.account_id.in_(acc_ids),
+        Transaction.amount < 0,
+        Transaction.transfer_account_id.is_(None),
+        Transaction.category_id.isnot(None),
+        Transaction.date >= start,
+        Transaction.date <= as_of_day,
+    )
+    for t in actual_q.all() if acc_ids else []:
+        actual_by_category[t.category_id] += -int(t.amount)
+
+    expected_by_category = defaultdict(int)
+    sched_all = ScheduledTransaction.query.filter(
+        ScheduledTransaction.active.is_(True),
+        ScheduledTransaction.amount < 0,
+        ScheduledTransaction.category_id.isnot(None),
+    ).all()
+    for sched in sched_all:
+        for d in _scheduled_dates_in_month(sched, month):
+            if month != today.strftime("%Y-%m") or d >= today:
+                expected_by_category[sched.category_id] += -int(sched.amount)
+
+    pace = []
+    for group in budget["groups"]:
+        for cat in group["categories"]:
+            assigned = cents(cat["assigned"])
+            if assigned <= 0 and not actual_by_category.get(cat["id"]) and not expected_by_category.get(cat["id"]):
+                continue
+            spent = actual_by_category.get(cat["id"], 0)
+            expected = expected_by_category.get(cat["id"], 0)
+            projected = spent + expected
+            left_after_expected = assigned - projected
+            daily_safe = left_after_expected / remaining_days if remaining_days > 0 else left_after_expected
+            expected_progress = assigned * elapsed_days / end.day if assigned else 0
+            pace_delta = spent - expected_progress
+            status = "ok"
+            message = "Dentro do ritmo."
+            if assigned <= 0 and projected > 0:
+                status = "danger"
+                message = "Sem meta definida para estes gastos."
+            elif projected > assigned:
+                status = "danger"
+                message = f"Reduza cerca de R$ {(projected - assigned) / 100:.2f} ou mova dinheiro para esta categoria."
+            elif daily_safe <= 0 and remaining_days > 0:
+                status = "danger"
+                message = "Os previstos ja consomem o restante da meta."
+            elif pace_delta > max(1000, assigned * 0.15):
+                status = "warn"
+                message = "Gasto acima do ritmo ideal do mes."
+            elif left_after_expected > 0 and remaining_days > 0:
+                message = f"Seguro gastar ate R$ {daily_safe / 100:.2f}/dia ate o fim do mes."
+            pace.append({
+                "category_id": cat["id"],
+                "category": cat["name"],
+                "group": group["name"],
+                "goal": reais(assigned),
+                "actual": reais(spent),
+                "expected": reais(expected),
+                "projected": reais(projected),
+                "left_after_expected": reais(left_after_expected),
+                "daily_safe": reais(max(0, daily_safe)),
+                "pace_delta": reais(pace_delta),
+                "status": status,
+                "message": message,
+            })
+    status_rank = {"danger": 0, "warn": 1, "ok": 2}
+    pace.sort(key=lambda x: (status_rank.get(x["status"], 9), x["left_after_expected"]))
     return jsonify({
         "month": month,
         "category": category,
@@ -902,6 +974,9 @@ def report_spending_timeline():
         "expected_total": reais(expected_total),
         "projected_total": reais(projected_total),
         "remaining_goal": reais(goal - projected_total),
+        "elapsed_days": elapsed_days,
+        "remaining_days": remaining_days,
+        "category_pace": pace,
         "days": days,
     })
 
