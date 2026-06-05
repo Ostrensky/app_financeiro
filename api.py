@@ -60,6 +60,15 @@ def last_day_of_month(month: str) -> date:
     return date(y, m + 1, 1) - timedelta(days=1)
 
 
+def spending_account_ids():
+    """Accounts included in spending reports.
+
+    Reports should match what appears in the transaction ledger, including
+    off-budget checking/cash/credit accounts. Archived accounts stay hidden.
+    """
+    return [a.id for a in Account.query.filter_by(archived=False).all()]
+
+
 # ---------- contas ----------
 @api.get("/accounts")
 def list_accounts():
@@ -660,7 +669,7 @@ def get_forecast():
 @api.get("/reports/spending")
 def report_spending():
     month = request.args.get("month") or date.today().strftime("%Y-%m")
-    acc_ids = [a.id for a in Account.query.filter_by(on_budget=True).all()]
+    acc_ids = spending_account_ids()
     rows = db.session.query(
         Category.name, func.coalesce(func.sum(Transaction.amount), 0),
     ).join(Transaction, Transaction.category_id == Category.id).filter(
@@ -674,7 +683,7 @@ def report_spending():
 @api.get("/reports/trend")
 def report_trend():
     months = int(request.args.get("months", 6))
-    acc_ids = [a.id for a in Account.query.filter_by(on_budget=True).all()]
+    acc_ids = spending_account_ids()
     today = date.today()
     out = []
     y, m = today.year, today.month
@@ -716,7 +725,7 @@ def report_category_evolution():
     """Evolucao mensal de gastos de uma categoria."""
     months = max(3, min(24, int(request.args.get("months", 12))))
     end_month = request.args.get("month") or date.today().strftime("%Y-%m")
-    acc_ids = [a.id for a in Account.query.filter_by(on_budget=True, archived=False).all()]
+    acc_ids = spending_account_ids()
     seq = _month_sequence_ending(end_month, months)
 
     cid = request.args.get("category_id")
@@ -819,7 +828,7 @@ def report_spending_timeline():
     start = date(int(month[:4]), int(month[5:7]), 1)
     end = last_day_of_month(month)
     today = date.today()
-    acc_ids = [a.id for a in Account.query.filter_by(on_budget=True, archived=False).all()]
+    acc_ids = spending_account_ids()
 
     q = Transaction.query.filter(
         Transaction.account_id.in_(acc_ids),
