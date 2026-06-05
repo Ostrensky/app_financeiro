@@ -784,6 +784,128 @@ def report_category_evolution():
     })
 
 
+def _scheduled_dates_in_month(sched, month: str):
+    y, m = int(month[:4]), int(month[5:7])
+    start = date(y, m, 1)
+    end = last_day_of_month(month)
+    if sched.next_date > end:
+        return []
+    freq = sched.frequency
+    if freq == "once":
+        return [sched.next_date] if start <= sched.next_date <= end else []
+    if freq == "monthly":
+        return [date(y, m, min(sched.next_date.day, end.day))] if sched.next_date <= end else []
+    if freq == "yearly":
+        return [date(y, m, min(sched.next_date.day, end.day))] if sched.next_date.month == m and sched.next_date <= end else []
+    if freq in ("weekly", "biweekly"):
+        step = 7 if freq == "weekly" else 14
+        d = sched.next_date
+        while d < start:
+            d = date.fromordinal(d.toordinal() + step)
+        out = []
+        while d <= end:
+            out.append(d)
+            d = date.fromordinal(d.toordinal() + step)
+        return out
+    return []
+
+
+@api.get("/reports/spending-timeline")
+def report_spending_timeline():
+    """Linha diaria de gasto real, previsto e meta do mes."""
+    month = request.args.get("month") or date.today().strftime("%Y-%m")
+    category_id = request.args.get("category_id")
+    cid = int(category_id) if category_id and category_id != "all" else None
+    start = date(int(month[:4]), int(month[5:7]), 1)
+    end = last_day_of_month(month)
+    today = date.today()
+    acc_ids = [a.id for a in Account.query.filter_by(on_budget=True, archived=False).all()]
+
+    q = Transaction.query.filter(
+        Transaction.account_id.in_(acc_ids),
+        Transaction.amount < 0,
+        Transaction.transfer_account_id.is_(None),
+        Transaction.date >= start,
+        Transaction.date <= end,
+    )
+    if cid:
+        q = q.filter(Transaction.category_id == cid)
+    else:
+        q = q.filter(Transaction.category_id.isnot(None))
+
+    actual_by_day = defaultdict(int)
+    for t in q.all() if acc_ids else []:
+        actual_by_day[t.date.isoformat()] += -int(t.amount)
+
+    expected_by_day = defaultdict(int)
+    sched_q = ScheduledTransaction.query.filter(
+        ScheduledTransaction.active.is_(True),
+        ScheduledTransaction.amount < 0,
+    )
+    if cid:
+        sched_q = sched_q.filter(ScheduledTransaction.category_id == cid)
+    else:
+        sched_q = sched_q.filter(ScheduledTransaction.category_id.isnot(None))
+    for sched in sched_q.all():
+        for d in _scheduled_dates_in_month(sched, month):
+            # Future and overdue expected spends should still affect the projection.
+            if month == today.strftime("%Y-%m") and d < today:
+                d = today
+            expected_by_day[d.isoformat()] += -int(sched.amount)
+
+    budget = budget_mod.budget_for_month(month)
+    if cid:
+        assigned = 0
+        category = None
+        for group in budget["groups"]:
+            for cat in group["categories"]:
+                if cat["id"] == cid:
+                    assigned = cents(cat["assigned"])
+                    category = {"id": cid, "name": cat["name"], "group": group["name"]}
+                    break
+        goal = assigned
+        label = category["name"] if category else "Categoria"
+    else:
+        goal = sum(cents(cat["assigned"]) for group in budget["groups"] for cat in group["categories"] if cat["assigned"] > 0)
+        category = None
+        label = "Todas as categorias"
+
+    days = []
+    actual_running = 0
+    projected_running = 0
+    for day in range(1, end.day + 1):
+        d = date(start.year, start.month, day)
+        key = d.isoformat()
+        actual_running += actual_by_day.get(key, 0)
+        projected_running += actual_by_day.get(key, 0)
+        projected_running += expected_by_day.get(key, 0)
+        goal_line = goal * day / end.day if goal else 0
+        days.append({
+            "date": key,
+            "day": day,
+            "actual": reais(actual_running),
+            "projected": reais(projected_running),
+            "goal_line": reais(goal_line),
+            "daily_actual": reais(actual_by_day.get(key, 0)),
+            "daily_expected": reais(expected_by_day.get(key, 0)),
+        })
+
+    actual_total = sum(actual_by_day.values())
+    expected_total = sum(expected_by_day.values())
+    projected_total = actual_total + expected_total
+    return jsonify({
+        "month": month,
+        "category": category,
+        "label": label,
+        "goal": reais(goal),
+        "actual_total": reais(actual_total),
+        "expected_total": reais(expected_total),
+        "projected_total": reais(projected_total),
+        "remaining_goal": reais(goal - projected_total),
+        "days": days,
+    })
+
+
 @api.get("/health")
 def financial_health():
     """Indicadores simples de saude financeira."""

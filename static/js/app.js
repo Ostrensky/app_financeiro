@@ -694,27 +694,47 @@ async function renderForecast() {
 }
 
 /* ============ RELATORIOS ============ */
-const reportState = { categoryId: null, months: 12 };
+const reportState = { mode: "timeline", categoryId: "all", months: 12 };
 
 async function renderReports() {
   const cats = flatCategories();
-  if (!reportState.categoryId && cats.length) reportState.categoryId = cats[0].id;
+  if (reportState.mode === "evolution" && (reportState.categoryId === "all" || !reportState.categoryId) && cats.length) reportState.categoryId = cats[0].id;
+  if (reportState.mode === "timeline" && !reportState.categoryId) reportState.categoryId = "all";
+  const catOptions = (reportState.mode === "timeline" ? '<option value="all">Todas as categorias</option>' : "") +
+    cats.map(c => `<option value="${c.id}" ${reportState.categoryId == c.id ? "selected" : ""}>${esc(c.group)} > ${esc(c.name)}</option>`).join("");
   $("#topbar-actions").innerHTML = `
+    <div class="seg" id="rep-mode" style="min-width:220px">
+      <button data-mode="timeline" class="${reportState.mode === "timeline" ? "on-income" : ""}">Timeline</button>
+      <button data-mode="evolution" class="${reportState.mode === "evolution" ? "on-income" : ""}">Evolucao</button>
+    </div>
     <select id="rep-cat" class="btn" style="background:var(--surface);max-width:260px">
-      ${cats.map(c => `<option value="${c.id}" ${reportState.categoryId == c.id ? "selected" : ""}>${esc(c.group)} > ${esc(c.name)}</option>`).join("")}
+      ${catOptions}
     </select>
-    <select id="rep-months" class="btn" style="background:var(--surface)">
+    <select id="rep-months" class="btn" style="background:var(--surface);display:${reportState.mode === "evolution" ? "inline-block" : "none"}">
       <option value="6" ${reportState.months == 6 ? "selected" : ""}>6 meses</option>
       <option value="12" ${reportState.months == 12 ? "selected" : ""}>12 meses</option>
       <option value="24" ${reportState.months == 24 ? "selected" : ""}>24 meses</option>
     </select>`;
-  $("#rep-cat")?.addEventListener("change", () => { reportState.categoryId = +$("#rep-cat").value; renderReports(); });
+  $$("#rep-mode button").forEach(b => b.addEventListener("click", () => {
+    reportState.mode = b.dataset.mode;
+    if (reportState.mode === "evolution" && reportState.categoryId === "all" && cats.length) reportState.categoryId = cats[0].id;
+    renderReports();
+  }));
+  $("#rep-cat")?.addEventListener("change", () => { reportState.categoryId = $("#rep-cat").value; renderReports(); });
   $("#rep-months")?.addEventListener("change", () => { reportState.months = +$("#rep-months").value; renderReports(); });
 
   if (!cats.length) {
     $("#view").innerHTML = '<div class="panel"><div class="empty">Crie categorias para ver relatorios.</div></div>';
     return;
   }
+  if (reportState.mode === "timeline") {
+    await renderSpendingTimeline();
+    return;
+  }
+  await renderCategoryEvolution();
+}
+
+async function renderCategoryEvolution() {
   const data = await api.get(`/reports/category-evolution?category_id=${reportState.categoryId}&months=${reportState.months}`);
   const s = data.summary || {};
   const changeCls = (s.change || 0) > 0 ? "neg" : (s.change || 0) < 0 ? "pos" : "";
@@ -751,6 +771,60 @@ async function renderReports() {
     options: { plugins: { legend: { display: false } },
       scales: { x: { ticks: { color: "#98a1b2" }, grid: { display: false } },
         y: { ticks: { color: "#98a1b2", callback: v => "R$" + v }, grid: { color: "#2a2f3a" } } } },
+  });
+}
+
+async function renderSpendingTimeline() {
+  const data = await api.get(`/reports/spending-timeline?month=${state.month}&category_id=${reportState.categoryId}`);
+  const remainingCls = data.remaining_goal >= 0 ? "pos" : "neg";
+  $("#view").innerHTML = `
+    <div class="rta-bar">
+      <div><small>${esc(data.label)} em ${monthLabel(data.month)}</small><div class="amt num">${brl(data.projected_total)}</div></div>
+      <div style="text-align:right;color:var(--muted);font-size:13px">
+        Meta: <b class="num">${brl(data.goal)}</b><br>
+        Sobra projetada: <b class="num ${remainingCls}">${brl(data.remaining_goal)}</b>
+      </div>
+    </div>
+    <div class="grid cards" style="margin-bottom:18px">
+      <div class="card"><div class="label">Gasto real</div><div class="value num neg">${brl(data.actual_total)}</div></div>
+      <div class="card"><div class="label">Previsto ainda no mes</div><div class="value num neg">${brl(data.expected_total)}</div></div>
+      <div class="card accent"><div class="label">Total projetado</div><div class="value num">${brl(data.projected_total)}</div></div>
+      <div class="card"><div class="label">Meta do mes</div><div class="value num">${brl(data.goal)}</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Timeline do dinheiro gasto</h3>
+        ${monthSwitcher()}
+      </div>
+      <div class="chart-wrap"><canvas id="timelineChart" height="180"></canvas></div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-head"><h3>Dias com movimento</h3></div>
+      <table><thead><tr><th>Dia</th><th class="right">Real</th><th class="right">Previsto</th><th class="right">Projetado acumulado</th></tr></thead>
+      <tbody>${data.days.filter(d => d.daily_actual || d.daily_expected).map(d => `<tr>
+        <td>${dateBR(d.date)}</td>
+        <td class="right num neg">${d.daily_actual ? brl(d.daily_actual) : "-"}</td>
+        <td class="right num neg">${d.daily_expected ? brl(d.daily_expected) : "-"}</td>
+        <td class="right num">${brl(d.projected)}</td>
+      </tr>`).join("") || '<tr><td colspan="4" class="empty">Sem gastos reais ou previstos neste mes.</td></tr>'}</tbody></table>
+    </div>`;
+  bindMonthSwitcher(renderReports);
+  if (state.chart) state.chart.destroy();
+  state.chart = new Chart($("#timelineChart"), {
+    type: "line",
+    data: {
+      labels: data.days.map(d => d.day),
+      datasets: [
+        { label: "Real", data: data.days.map(d => d.actual), borderColor: "#f6776f", tension: .25, pointRadius: 0, borderWidth: 2 },
+        { label: "Projetado com previstos", data: data.days.map(d => d.projected), borderColor: "#e7bd6b", backgroundColor: "rgba(231,189,107,.1)", fill: true, tension: .25, pointRadius: 0, borderWidth: 2 },
+        { label: "Meta proporcional", data: data.days.map(d => d.goal_line), borderColor: "#57d98a", borderDash: [5, 5], tension: 0, pointRadius: 0, borderWidth: 1.5 },
+      ],
+    },
+    options: {
+      plugins: { legend: { labels: { color: "#98a1b2", font: { family: "Bricolage Grotesque" } } } },
+      scales: { x: { ticks: { color: "#98a1b2" }, grid: { display: false } },
+        y: { ticks: { color: "#98a1b2", callback: v => "R$" + v }, grid: { color: "#2a2f3a" } } },
+    },
   });
 }
 
